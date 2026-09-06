@@ -35,9 +35,9 @@ extern void spu_0009_at_01596700_spu_recomp_register(void);
 void scottpilgrim_spu_register_all(void)
 {
     spu_begin_image(1); spu_0000_at_013D5B00_spu_recomp_register();
-    spu_workload_register_img(0x530F174F0298D2DAULL, spu_0000_at_013D5B00_spu_func_00003070, 1, "spu_0000_at_013D5B00");
+    spu_workload_register_img(0x5CFFBA88D1D9616DULL, spu_0000_at_013D5B00_spu_func_00003070, 1, "spu_0000_at_013D5B00");
     spu_begin_image(2); spu_0001_at_013E1F80_spu_recomp_register();
-    spu_workload_register_img(0x4E929E37B35041D2ULL, spu_0001_at_013E1F80_spu_func_00003050, 2, "spu_0001_at_013E1F80");
+    spu_workload_register_img(0xB8D923CF62CDEAFFULL, spu_0001_at_013E1F80_spu_func_00003050, 2, "spu_0001_at_013E1F80");
     spu_begin_image(3); spu_0002_at_013F2700_spu_recomp_register();
     spu_workload_register_img(0x206C41A83C2CBF0CULL, spu_0002_at_013F2700_spu_func_00000098, 3, "spu_0002_at_013F2700");
     spu_begin_image(4); spu_0003_at_013F4980_spu_recomp_register();

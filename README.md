@@ -27,9 +27,11 @@ any more. That's the thing this repo is about.
 
 ---
 
-## 📊 Status: Phase 1 — Lifted and Building
+## 📊 Status: Phase 2 — Boots, Opens a Window, Loads Its Data
 
-Nothing runs yet. What follows is the honest state of the port on day one.
+The title boots end-to-end, brings up its own engine, opens a D3D12 window and
+presents at 32 fps. It reads every one of its archives. It does not yet draw
+geometry, because loading stops on an audio SPU task — see the blocker below.
 
 | Milestone | Status |
 |---|---|
@@ -39,13 +41,72 @@ Nothing runs yet. What follows is the honest state of the port on day one.
 | Function discovery | ✅ Done — **57,318** functions, every `.opd` descriptor verified as a start |
 | PPU lift → C++ | ✅ Done — **59,429** functions, 298 MB across 9 translation units |
 | SPU images | ✅ Done — 10 embedded ELFs, extracted statically, all lifted |
-| Build (clang-cl + Ninja) | 🔨 In progress |
-| First boot (recompiled CRT runs) | ⬜ Not started |
-| Reach `main()` | ⬜ Not started |
-| Graphics (RSX → D3D12) | ⬜ Not started |
-| Audio (MultiStream → cellAudio) | ⬜ Not started |
+| Build (clang-cl + Ninja) | ✅ Done — 101 MB exe in 2 m 22 s |
+| First boot / CRT / `main()` | ✅ Done — recompiled CRT runs, TLS + argv land |
+| Guest threads | ✅ Done — `Gear::`, `Onyx`, `Dare::` workers all spawn and run |
+| `cellGame` boot flow | ✅ Done — BootCheck / DataCheck / ContentPermit complete |
+| Graphics backend (RSX → D3D12) | ⚠️ **Partial** — window opens, presents at 32 fps, **no geometry yet** |
+| Game data / asset loading | ✅ Done — all four `gamedata` archives open and read (via AIO) |
+| SPU dispatch | ✅ Done — both SPURS tasks fingerprint-match and run, 0 misses |
+| Audio (MultiStream → cellAudio) | ⚠️ **Partial** — port opens and starts, SPU task dies on a DMA'd overlay |
 | Input (cellPad → XInput) | ⬜ Not started |
 | 🎸 Playable | ⬜ Not started |
+
+### What's Working
+
+- **59,429 PPU functions** recompiled to native C++ and linked into one 101 MB binary
+- **The title's own engine runs** — Ubisoft's Gear/Onyx/Claw, with named worker
+  threads (`Gear::AsynchDevice`, `Onyx Loading Worker`, `Dare::AudioRenderer`)
+- **A window with the game's own present loop behind it** — `cellVideoOut` configures
+  720p, both display buffers register, the live NV4097 → D3D12 engine comes up and
+  flips at 32 fps
+- **Every archive the boot asks for opens and reads** — `gamedata`, `gamedata.fat`,
+  `gamedata_1`, `gamedata_1.fat`, plus `flashATRAC.pic` out of firmware
+- **Both SPURS tasks dispatch and run** — zero fingerprint misses across a run
+- **Audio initialises** — `cellAudioInit`, `PortOpen(8ch × 8 blocks)`, `PortStart`
+
+### Current Blocker
+
+**The MultiStream audio SPU task branches into code that was never in the ELF.**
+
+```
+[spu] img=2 branched into unlifted LS 0x33190 (lr=0x05F50) -- ending the job
+[spu_workload] async image=2 RETURNED rc=0 (job ran to completion, did not loop)
+```
+
+Local store `0x33190` is 209,296 — far past the end of the 67,220-byte image. Sony
+MultiStream **DMAs its DSP modules into local store at runtime** (`cellMSDSPLoadDSPFromMemory`
+is right there in the binary's symbols), so they are not in the embedded ELF and
+nothing lifted them. The task falls out of its loop the instant it branches into one.
+
+Everything downstream is consequence, not cause: `Dare::AudioRenderer` and
+`Dare::HLPLoadingManager` exit immediately, a later `cellSpursSendSignal` has nothing
+alive to receive it, loading never completes, and the renderer has therefore
+submitted zero draw packets. The next step is capturing those overlays as they land
+in LS and lifting them, the way `SPU_DUMP_MISS` captures raw SPURS job images.
+
+### Fixed So Far
+
+Four blockers, three of them fixes to ps3recomp itself that every port inherits.
+Full account, in the order it happened: [`PROGRESS.md`](PROGRESS.md).
+
+- **Every file open missed.** `/app_home/...` maps to the VFS *root*, not to
+  `PS3_GAME/USRDIR`, so all 37 opens failed. `tools/setup_vfs.sh` now lays the root
+  out so it *is* the USRDIR (hard links and junctions, no copies) while still
+  carrying `PS3_GAME/PARAM.SFO` for `cellGame`.
+- **One open, then nothing.** This title never calls `cellFsRead` — it reads
+  everything through **`cellFsAioRead`**, which was an unresolved NID. Its loader
+  submitted requests nothing ever completed. Implemented `cellFsAioInit` / `AioRead`
+  / `AioFinish` / `AioCancel` in the runtime.
+- **All ten SPU images registered under fingerprints nothing would dispatch.**
+  `extract_spu_images.py` disagreed with the runtime's `spu_elf_image_size()` — it
+  counted only `PT_LOAD` extents and seeded from the wrong header table. These
+  images have no section headers and one non-`PT_LOAD` segment past the last
+  `PT_LOAD`, so every extract came out **52 bytes short**.
+- **A signal lost to one missing byte swap.** `cellSpursCreateTask` wrote its
+  `taskId` out-param host-endian; the guest read `0x01000000` for task 1 and handed
+  that back to `cellSpursSendSignal`, which dropped it. The SPU task sat in
+  `WAIT_SIGNAL` while the PPU waited on the event flag it would have set.
 
 **This is the largest ps3recomp target attempted so far**, by a wide margin:
 
@@ -56,9 +117,9 @@ Nothing runs yet. What follows is the honest state of the port on day one.
 | Tokyo Jungle | 7,924 |
 | **Scott Pilgrim** | **59,429** |
 
-18.9 MB of `.text` against Tokyo Jungle's ~1.3 MB. A 2D beat-'em-up has no business being
-this big — the size is the engine, the middleware and the statically-linked Sony libraries
-riding along inside one EBOOT, not the game logic.
+18.9 MB of `.text` against Tokyo Jungle's ~1.3 MB. A 2D beat-'em-up has no business
+being this big — the size is the engine, the middleware and the statically-linked
+Sony libraries riding along inside one EBOOT, not the game logic.
 
 ---
 
@@ -162,12 +223,16 @@ Prereqs: Python 3.9+, CMake 3.20+, **clang-cl** + Ninja (the shared harness uses
 ```bash
 # 1. Supply your own legally obtained copy of the game and unpack it:
 python ../ps3recomp/tools/pkg_extract.py your.pkg extracted
-cp extracted/USRDIR/EBOOT.BIN game/ && rpcs3 --decrypt game/EBOOT.BIN
+mkdir -p game && cp extracted/USRDIR/EBOOT.BIN game/
+rpcs3 --decrypt game/EBOOT.BIN && cp game/EBOOT.elf extracted/USRDIR/
 
 # 2. Lift the PPU image + the 10 SPU images, and generate the HLE NID table:
 PS3RECOMP=../ps3recomp ./tools/relift.sh
 
-# 3. Build. Release is the default and it matters -- an unoptimised build of a
+# 3. Lay out the guest filesystem (hard links + junctions, no copies):
+./tools/setup_vfs.sh
+
+# 4. Build. Release is the default and it matters -- an unoptimised build of a
 #    298 MB recompiled tree runs at a third the speed. Budget the disk space.
 #    llvm-rc: clang-cl outside a VS dev prompt cannot find Microsoft's rc.exe.
 cmake -S . -B build -G Ninja \
@@ -176,7 +241,7 @@ cmake -S . -B build -G Ninja \
     -DCMAKE_RC_COMPILER="C:/Program Files/LLVM/bin/llvm-rc.exe"
 cmake --build build
 
-# 4. Run, with the live NV4097 -> D3D12 draw engine:
+# 5. Run, with the live NV4097 -> D3D12 draw engine:
 ./tools/run.sh
 ```
 
