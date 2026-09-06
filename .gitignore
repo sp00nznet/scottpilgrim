@@ -1,0 +1,52 @@
+# ── Copyrighted game data (bring your own legal copy) ───────────────────
+*.rar
+*.r0*
+*.pkg
+*.PKG
+pkg/
+pkg_x/
+extracted/
+extracted_crack/
+game/
+vfs/
+*.EDAT
+*.TRP
+*.SFO
+*.self
+*.elf
+*.BIN
+EBOOT*
+spu_images/
+spu_dump/
+
+# ── Generated recompilation output ──────────────────────────────────────
+src/recomp/
+src/gen/
+src/spu_gen/
+analysis/
+
+# ── Build artifacts ─────────────────────────────────────────────────────
+build/
+out/
+*.o
+*.obj
+*.exe
+*.pdb
+*.ilk
+*.lib
+*.dll
+*.map
+
+# ── Scratch ─────────────────────────────────────────────────────────────
+*.log
+*.png
+!docs/media/*.png
+*.gif
+!docs/media/*.gif
+scratch/
+__pycache__/
+.vs/
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
