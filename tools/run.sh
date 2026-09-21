@@ -17,7 +17,8 @@ ROOT_W="$(cygpath -m "$ROOT")"
 
 export PS3_VFS_ROOT="${PS3_VFS_ROOT:-$ROOT_W/vfs}"
 export PS3_HDD0_ROOT="${PS3_HDD0_ROOT:-$ROOT_W/vfs/dev_hdd0}"
-export PS3_DEV_FLASH="${PS3_DEV_FLASH:-G:/recomp/tools/rpcs3/dev_flash}"
+# Point at an RPCS3 dev_flash dump. No sane default exists, so this must be set.
+export PS3_DEV_FLASH="${PS3_DEV_FLASH:?set PS3_DEV_FLASH to your RPCS3 dev_flash path}"
 export PS3_TITLE="${PS3_TITLE:-Scott Pilgrim vs. The World: The Game - ps3recomp}"
 export RSX_LIVE_DRAW="${RSX_LIVE_DRAW:-1}"
 
